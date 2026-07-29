@@ -1,6 +1,9 @@
 # DevOps Exam Portal
 
 A full-stack exam platform for testing DevOps knowledge across 8 topics: Docker, Kubernetes, Terraform, AWS, Linux, Jenkins, Git, and DevOps principles.
+app ui
+<img width="1354" height="795" alt="Screenshot 2026-07-29 at 2 38 07 PM" src="https://github.com/user-attachments/assets/6b121a54-eea7-4f3c-9d17-f28357123083" />
+
 
 ## Stack
 
