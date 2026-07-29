@@ -1,0 +1,312 @@
+1. First problem: Docker Compose command failed
+Your input:
+sudo docker compose version
+
+Output:
+docker: 'compose' is not a docker command.
+
+What I checked
+I identified that:
+Docker was installed
+Docker Compose plugin was missing
+Debug approach:
+Check Docker installation:
+docker --version
+docker compose version
+docker-compose --version
+
+Goal:
+Verify Docker exists
+Verify Compose exists
+Identify old vs new Compose
+2. Running Compose from wrong directory
+Your input:
+docker compose up -d --build
+
+Output:
+no configuration file provided: not found
+
+What this means
+Docker Compose looks for:
+docker-compose.yml
+
+in the current directory.
+You were in:
+
+/home/ec2-user
+
+but your project was:
+/home/ec2-user/devops-exam-portal
+
+Fix:
+Navigate into the project:
+cd devops-exam-portal
+
+Then:
+docker compose up -d --build
+
+3. Missing environment variables
+Your input:
+MYSQL_ROOT_PASSWORD variable is not set
+DB_NAME variable is not set
+.env not found
+
+What I checked
+Docker Compose was expecting:
+.env
+
+because your compose file referenced variables.
+Example:
+
+environment:
+  MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+
+Docker replaces:
+${MYSQL_ROOT_PASSWORD}
+
+from:
+.env
+
+Debug commands:
+Check files:
+ls -la
+
+Look for:
+.env
+.env.example
+.env.sample
+
+If missing:
+cp .env.example .env
+
+4. Buildx error during image build
+Your input:
+compose build requires buildx 0.17.0 or later
+
+What I identified
+Docker Compose v2 uses BuildKit/Buildx to build images.
+The issue was:
+
+Docker Buildx plugin missing or outdated
+
+Debug commands:
+docker buildx version
+docker version
+
+Possible fix:
+Install/update Buildx.
+
+5. Containers started successfully
+Later you ran:
+docker compose logs backend
+
+Output:
+Database connected.
+Server running on port 5001
+
+What this proved
+Backend was healthy.
+I checked:
+
+Node.js started
+Express started
+Database connection worked
+Next question:
+"Does the API respond?"
+
+6. Testing backend endpoint
+You tried:
+curl http://localhost:5001
+
+Response:
+Cannot GET /
+
+Debug reasoning
+This does NOT mean the server is down.
+It means:
+
+Server is running ✅
+Route / does not exist ❌
+So I checked your server.js.
+You provided:
+
+app.get('/health', (req,res)=>{
+ res.json({status:'ok'})
+})
+
+Therefore correct test:
+curl http://localhost:5001/health
+
+Result:
+{"status":"ok"}
+
+Backend confirmed healthy.
+7. Checking all running services
+Command:
+docker compose ps
+
+Output:
+devops_backend   Up
+devops_frontend  Up
+devops_mysql     Up (healthy)
+
+What I verified
+Architecture:
+Browser
+   |
+   |
+Frontend Nginx :3000
+   |
+   |
+Backend Node :5001
+   |
+   |
+MySQL :3306
+
+All containers were running.
+8. Login failed debugging
+You reported:
+login failed
+
+First question:
+"Is backend receiving the request?"
+
+Checked:
+
+docker compose logs -f backend
+
+Output:
+Database connected.
+Server running on port 5001
+
+No login request appeared.
+Reasoning:
+If backend does not show login request:
+Possible causes:
+
+Frontend not calling backend
+Wrong API URL
+Proxy problem
+9. Checking frontend API configuration
+Command:
+grep -R "localhost\|5001\|api" frontend/
+
+Found:
+frontend/nginx.conf:
+
+proxy_pass http://backend:5000/api/
+
+Important discovery.
+Frontend was sending:
+
+Frontend nginx
+       |
+       |
+       backend:5000
+
+But backend actually runs:
+backend:5001
+
+From:
+docker compose ps
+
+we saw:
+5001->5001
+
+and from:
+const PORT = process.env.PORT || 5001;
+
+Therefore:
+Wrong:
+
+backend:5000 ❌
+
+Correct:
+backend:5001 ✅
+
+10. Confirming the problem from frontend logs
+Command:
+docker compose logs frontend --tail=100
+
+Found:
+POST /api/auth/login
+
+upstream:
+http://172.22.0.3:5000/api/auth/login
+
+connect() failed (111: Connection refused)
+
+This confirmed:
+Frontend proxy was wrong.
+
+11. Fix
+Changed:
+proxy_pass http://backend:5000/api/;
+
+to:
+proxy_pass http://backend:5001/api/;
+
+Then rebuilt:
+docker compose up -d --build frontend
+
+12. Database checking
+After successful deployment, you wanted to verify exam data.
+First checked databases:
+
+SHOW DATABASES;
+
+Found:
+devops_exam_db
+
+Next step:
+USE devops_exam_db;
+
+SHOW TABLES;
+
+Then identify tables:
+users
+exams
+results
+submissions
+
+Then query:
+SELECT * FROM results;
+
+General Debugging Method Used
+For any Docker full-stack project:
+1. Is Docker working?
+        |
+        v
+2. Is Compose working?
+        |
+        v
+3. Are containers running?
+        |
+        v
+4. Are logs clean?
+        |
+        v
+5. Is database connected?
+        |
+        v
+6. Can backend respond?
+        |
+        v
+7. Can frontend reach backend?
+        |
+        v
+8. Can user workflow complete?
+        |
+        v
+9. Verify database changes
+
+Commands I mainly used:
+docker compose ps
+docker compose logs
+docker compose logs -f service_name
+docker compose exec service_name
+curl endpoint
+grep -R "keyword" project/
+cat configuration_file
+
+This is the standard troubleshooting flow for a Dockerized React/Vite + Node/Express + MySQL application.
