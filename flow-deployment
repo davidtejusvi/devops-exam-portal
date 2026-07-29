@@ -1,0 +1,428 @@
+Complete Flow: Git Clone → Docker Deployment → Debugging
+Step 1: Clone the repository
+Command
+git clone <repository-url>
+
+Example:
+git clone https://github.com/company/devops-exam-portal.git
+
+What happens?
+Git downloads:
+devops-exam-portal/
+│
+├── backend/
+├── frontend/
+├── docker-compose.yml
+├── README.md
+└── .env.example
+
+First check after cloning
+Go inside:
+cd devops-exam-portal
+
+Check files:
+ls -la
+
+Expected:
+backend
+frontend
+docker-compose.yml
+.env.example
+
+Step 2: Understand project structure
+Before running anything, identify components.
+Your project:
+
+devops-exam-portal
+
+├── backend
+│   ├── server.js
+│   ├── routes/
+│   ├── models/
+│   └── config/
+│
+├── frontend
+│   ├── src/
+│   ├── nginx.conf
+│   └── Dockerfile
+│
+├── docker-compose.yml
+└── .env
+
+Architecture:
+User Browser
+      |
+      |
+      v
+Frontend (React + Nginx)
+Port 3000
+      |
+      |
+      v
+Backend (Node Express)
+Port 5001
+      |
+      |
+      v
+MySQL
+Port 3306
+
+Step 3: Check Docker installation
+Before deployment:
+docker --version
+
+Example:
+Docker version 28.x
+
+Check Compose:
+docker compose version
+
+If you get:
+docker: 'compose' is not a docker command
+
+then Docker Compose plugin is missing.
+Step 4: Check Docker Compose file
+Open:
+cat docker-compose.yml
+
+Look for services:
+Example:
+
+services:
+
+ mysql:
+   image: mysql:8.0
+
+ backend:
+   build: ./backend
+
+ frontend:
+   build: ./frontend
+
+This tells you:
+Three containers will run:
+
+mysql
+backend
+frontend
+
+Step 5: Configure environment variables
+Check:
+ls -la
+
+If .env missing:
+.env not found
+
+Create:
+cp .env.example .env
+
+Edit:
+nano .env
+
+Example:
+MYSQL_ROOT_PASSWORD=root123
+
+DB_NAME=devops_exam_db
+
+DB_USER=exam_user
+
+DB_PASSWORD=password
+
+PORT=5001
+
+Why?
+Docker Compose reads:
+
+${DB_NAME}
+
+from:
+.env
+
+Step 6: Build and start containers
+Command:
+docker compose up -d --build
+
+Meaning:
+up
+=
+create containers
+
+-d
+=
+run in background
+
+--build
+=
+create images again
+
+Docker will:
+Pull images
+Example:
+mysql:8.0
+
+Build your images:
+devops-exam-portal-backend
+devops-exam-portal-frontend
+
+Start containers
+Step 7: First debugging point - Build errors
+Example:
+You got:
+
+compose build requires buildx 0.17.0 or later
+
+Debug:
+Check:
+
+docker buildx version
+
+Why?
+Docker Compose v2 uses BuildKit.
+
+Fix:
+
+Update Docker/Buildx.
+
+Step 8: Check container status
+Always run:
+docker compose ps
+
+Expected:
+NAME              STATUS
+
+backend           Up
+frontend          Up
+mysql             Up (healthy)
+
+If you see:
+Exited
+
+something failed.
+Step 9: Check logs
+Never guess. Check logs.
+Backend:
+
+docker compose logs backend
+
+You got:
+Database connected.
+Server running on port 5001
+
+Meaning:
+✅ Node started
+✅ Database connected
+
+Frontend:
+docker compose logs frontend
+
+Check:
+nginx started
+
+Meaning:
+Frontend server works.
+
+Step 10: Test backend directly
+Before testing UI:
+Test API.
+
+Your backend had:
+
+app.get('/health')
+
+So:
+curl http://localhost:5001/health
+
+Response:
+{
+ "status":"ok"
+}
+
+Meaning:
+Backend is alive.
+
+Step 11: Test frontend
+From EC2:
+curl http://localhost:3000
+
+Expected:
+<!doctype html>
+<html>
+
+Meaning:
+Frontend works.
+
+Step 12: User login failed debugging
+Problem:
+Login failed
+
+Do not immediately change code.
+Follow the request path:
+
+Browser
+ |
+ |
+Frontend
+ |
+ |
+Backend
+ |
+ |
+Database
+
+Find where it breaks.
+Check backend logs
+Command:
+docker compose logs -f backend
+
+Result:
+Database connected.
+Server running
+
+No login request.
+Conclusion:
+
+Request never reached backend
+
+Problem is before backend.
+Step 13: Check frontend API configuration
+Search:
+grep -R "api\|5001\|localhost" frontend/
+
+Found:
+frontend/nginx.conf
+
+with:
+proxy_pass http://backend:5000/api/
+
+Problem:
+Frontend sends:
+
+frontend
+   |
+   |
+backend:5000
+
+But backend runs:
+backend:5001
+
+Step 14: Confirm with logs
+Frontend logs:
+docker compose logs frontend
+
+Found:
+POST /api/auth/login
+
+upstream:
+backend:5000
+
+connection refused
+
+This confirms:
+Wrong backend port
+
+Step 15: Fix configuration
+Change:
+proxy_pass http://backend:5000/api/;
+
+to:
+proxy_pass http://backend:5001/api/;
+
+Rebuild:
+docker compose up -d --build frontend
+
+Step 16: Verify database data
+Enter MySQL:
+docker compose exec mysql mysql -u root -p
+
+Show databases:
+SHOW DATABASES;
+
+Select:
+USE devops_exam_db;
+
+Tables:
+SHOW TABLES;
+
+Check results:
+SELECT * FROM results;
+
+Common Debug Commands Cheat Sheet
+Containers
+docker ps
+docker compose ps
+
+Logs
+docker compose logs backend
+
+docker compose logs frontend
+
+docker compose logs -f backend
+
+Enter container
+Backend:
+docker compose exec backend bash
+
+MySQL:
+docker compose exec mysql mysql -u root -p
+
+Check ports
+netstat -tulpn
+
+or:
+docker port container_name
+
+Check environment
+docker compose exec backend env
+
+Check API
+curl http://localhost:5001/health
+
+Real DevOps Debugging Mindset
+When something fails, follow this order:
+1. Code exists?
+        |
+        v
+2. Configuration correct?
+        |
+        v
+3. Docker image built?
+        |
+        v
+4. Container running?
+        |
+        v
+5. Application logs?
+        |
+        v
+6. Network connection?
+        |
+        v
+7. Database connection?
+        |
+        v
+8. User workflow test?
+
+In your case:
+Git clone
+    ↓
+Docker Compose issue
+    ↓
+.env missing
+    ↓
+Buildx issue
+    ↓
+Containers started
+    ↓
+Backend health checked
+    ↓
+Frontend login failed
+    ↓
+Nginx proxy debugging
+    ↓
+Wrong backend port found
+    ↓
+Fixed and rebuilt
+    ↓
+Database verification
+
+This is the exact troubleshooting pattern used in real DevOps production environments.
