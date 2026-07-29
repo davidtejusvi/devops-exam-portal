@@ -1,0 +1,261 @@
+CREATE DATABASE IF NOT EXISTS devops_exam_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'examuser'@'%' IDENTIFIED BY 'exampassword';
+GRANT ALL PRIVILEGES ON devops_exam_db.* TO 'examuser'@'%';
+CREATE USER IF NOT EXISTS 'examuser'@'localhost' IDENTIFIED BY 'exampassword';
+GRANT ALL PRIVILEGES ON devops_exam_db.* TO 'examuser'@'localhost';
+FLUSH PRIVILEGES;
+
+USE devops_exam_db;
+
+CREATE TABLE IF NOT EXISTS users (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  name        VARCHAR(100) NOT NULL,
+  email       VARCHAR(150) NOT NULL UNIQUE,
+  password    VARCHAR(255),
+  googleId    VARCHAR(100) UNIQUE,
+  avatar      VARCHAR(500),
+  role        ENUM('user', 'admin') NOT NULL DEFAULT 'user',
+  bio         TEXT,
+  isActive    TINYINT(1) NOT NULL DEFAULT 1,
+  createdAt   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Exams table
+CREATE TABLE IF NOT EXISTS exams (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  title           VARCHAR(150) NOT NULL,
+  slug            VARCHAR(100) NOT NULL UNIQUE,
+  description     TEXT,
+  category        ENUM('docker','kubernetes','terraform','aws','linux','jenkins','git','devops') NOT NULL,
+  difficulty      ENUM('beginner','intermediate','advanced') NOT NULL DEFAULT 'intermediate',
+  durationMinutes INT NOT NULL DEFAULT 30,
+  passingScore    INT NOT NULL DEFAULT 70,
+  isActive        TINYINT(1) NOT NULL DEFAULT 1,
+  createdAt       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+
+-- Questions table
+CREATE TABLE IF NOT EXISTS questions (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  examId        INT NOT NULL,
+  text          TEXT NOT NULL,
+  options       JSON NOT NULL,
+  correctOption INT NOT NULL,
+  explanation   TEXT,
+  points        INT NOT NULL DEFAULT 1,
+  createdAt     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (examId) REFERENCES exams(id) ON DELETE CASCADE
+);
+
+-- Results table
+CREATE TABLE IF NOT EXISTS results (
+  id               INT AUTO_INCREMENT PRIMARY KEY,
+  userId           INT NOT NULL,
+  examId           INT NOT NULL,
+  score            FLOAT NOT NULL,
+  totalQuestions   INT NOT NULL,
+  correctAnswers   INT NOT NULL,
+  timeTakenSeconds INT,
+  answers          JSON,
+  passed           TINYINT(1) NOT NULL,
+  createdAt        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (examId) REFERENCES exams(id) ON DELETE CASCADE
+);
+
+INSERT IGNORE INTO users (name, email, password, role) VALUES
+('Admin', 'admin@devopsportal.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQyCgSA2X2oKzOZ/IkHzfxP9O', 'admin');
+
+-- ── Exams ─────────────────────────────────────────────────────────────────────
+INSERT IGNORE INTO exams (title, slug, description, category, difficulty, durationMinutes, passingScore) VALUES
+('Docker Fundamentals', 'docker', 'Test your knowledge of Docker containers, images, and networking.', 'docker', 'beginner', 30, 70),
+('Kubernetes Core Concepts', 'kubernetes', 'Pods, Services, Deployments, and more.', 'kubernetes', 'intermediate', 45, 70),
+('Terraform Infrastructure as Code', 'terraform', 'State management, modules, and providers.', 'terraform', 'intermediate', 40, 70),
+('AWS Cloud Practitioner', 'aws', 'Core AWS services and cloud fundamentals.', 'aws', 'beginner', 60, 70),
+('Linux Administration', 'linux', 'File system, processes, networking, and scripting.', 'linux', 'intermediate', 40, 70),
+('Jenkins CI/CD', 'jenkins', 'Pipelines, plugins, and continuous integration.', 'jenkins', 'intermediate', 35, 70),
+('Git Version Control', 'git', 'Branching strategies, rebasing, and collaboration.', 'git', 'beginner', 25, 70),
+('DevOps Principles', 'devops', 'Culture, practices, and tools in the DevOps lifecycle.', 'devops', 'advanced', 50, 75);
+
+-- ── Sample Docker Questions ───────────────────────────────────────────────────
+INSERT INTO questions (examId, text, options, correctOption, explanation) VALUES
+(
+  (SELECT id FROM exams WHERE slug='docker'),
+  'What command is used to list all running Docker containers?',
+  '["docker ps", "docker ls", "docker list", "docker containers"]',
+  0,
+  'docker ps lists running containers. Use docker ps -a to include stopped containers.'
+),
+(
+  (SELECT id FROM exams WHERE slug='docker'),
+  'Which Dockerfile instruction sets the base image?',
+  '["FROM", "BASE", "IMAGE", "RUN"]',
+  0,
+  'FROM is always the first instruction in a Dockerfile and defines the base image.'
+),
+(
+  (SELECT id FROM exams WHERE slug='docker'),
+  'What does the -d flag do in "docker run -d nginx"?',
+  '["Deletes the container after exit", "Runs the container in detached mode", "Disables networking", "Downloads the image only"]',
+  1,
+  '-d (detached) runs the container in the background and prints the container ID.'
+),
+(
+  (SELECT id FROM exams WHERE slug='docker'),
+  'How do you build an image from a Dockerfile in the current directory?',
+  '["docker build .", "docker create .", "docker compile .", "docker image ."]',
+  0,
+  'docker build . builds an image using the Dockerfile in the current directory.'
+),
+(
+  (SELECT id FROM exams WHERE slug='docker'),
+  'What is a Docker volume used for?',
+  '["Scaling containers", "Persisting data outside the container lifecycle", "Exposing ports", "Building images faster"]',
+  1,
+  'Volumes persist data independently of a container, surviving restarts and removals.'
+);
+
+-- ── Sample Kubernetes Questions ───────────────────────────────────────────────
+INSERT INTO questions (examId, text, options, correctOption, explanation) VALUES
+(
+  (SELECT id FROM exams WHERE slug='kubernetes'),
+  'What is the smallest deployable unit in Kubernetes?',
+  '["Container", "Pod", "Node", "Deployment"]',
+  1,
+  'A Pod is the smallest and most basic deployable unit in Kubernetes, containing one or more containers.'
+),
+(
+  (SELECT id FROM exams WHERE slug='kubernetes'),
+  'Which kubectl command shows all pods in all namespaces?',
+  '["kubectl get pods", "kubectl get pods -A", "kubectl describe pods", "kubectl list pods --all"]',
+  1,
+  'kubectl get pods -A (or --all-namespaces) lists pods across every namespace.'
+),
+(
+  (SELECT id FROM exams WHERE slug='kubernetes'),
+  'What Kubernetes object ensures a specified number of Pod replicas are running at all times?',
+  '["Service", "ConfigMap", "ReplicaSet", "Ingress"]',
+  2,
+  'A ReplicaSet maintains a stable set of replica Pods running at any given time.'
+),
+(
+  (SELECT id FROM exams WHERE slug='kubernetes'),
+  'What does a Kubernetes Service do?',
+  '["Stores secrets", "Provides a stable network endpoint to access Pods", "Schedules Pods on nodes", "Manages storage volumes"]',
+  1,
+  'Services provide a stable DNS name and IP address to expose a set of Pods.'
+),
+(
+  (SELECT id FROM exams WHERE slug='kubernetes'),
+  'Which file format is most commonly used for Kubernetes manifests?',
+  '["JSON", "TOML", "YAML", "XML"]',
+  2,
+  'YAML is the most commonly used format for Kubernetes manifest files.'
+);
+
+-- ── Sample AWS Questions ───────────────────────────────────────────────────────
+INSERT INTO questions (examId, text, options, correctOption, explanation) VALUES
+(
+  (SELECT id FROM exams WHERE slug='aws'),
+  'Which AWS service provides object storage?',
+  '["EBS", "S3", "EFS", "Glacier only"]',
+  1,
+  'Amazon S3 (Simple Storage Service) provides scalable object storage.'
+),
+(
+  (SELECT id FROM exams WHERE slug='aws'),
+  'What does IAM stand for in AWS?',
+  '["Internet Access Management", "Identity and Access Management", "Infrastructure Automation Module", "Internal Application Manager"]',
+  1,
+  'IAM stands for Identity and Access Management, used to manage user access to AWS resources.'
+),
+(
+  (SELECT id FROM exams WHERE slug='aws'),
+  'Which AWS service is used to run serverless functions?',
+  '["EC2", "ECS", "Lambda", "Beanstalk"]',
+  2,
+  'AWS Lambda lets you run code without provisioning or managing servers.'
+),
+(
+  (SELECT id FROM exams WHERE slug='aws'),
+  'What is the default region when setting up an AWS CLI profile?',
+  '["us-east-1", "us-west-2", "eu-west-1", "No default — must be set manually"]',
+  3,
+  'The AWS CLI does not set a default region automatically; you must configure it.'
+),
+(
+  (SELECT id FROM exams WHERE slug='aws'),
+  'Which AWS service provides a managed relational database?',
+  '["DynamoDB", "ElastiCache", "RDS", "Redshift"]',
+  2,
+  'Amazon RDS (Relational Database Service) supports MySQL, PostgreSQL, MariaDB, and more.'
+);
+
+SHOW DATABASES;
+SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'devops_exam_db';
+
+SELECT * FROM exams;
+
+-- Fix admin password to: Admin@123
+UPDATE users 
+SET password = '$2a$12$.59LQgwDB6lURN0OXGg/judR1Ck/zP7F1PtmlX7DkpCy52RkWmBhW'
+WHERE email = 'admin@devopsportal.com';
+
+-- Insert admin user with correct password hash for: Admin@123
+USE devops_exam_db;
+
+-- Fix users table
+ALTER TABLE users 
+  MODIFY createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  MODIFY updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+
+-- Fix exams table
+ALTER TABLE exams 
+  MODIFY createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  MODIFY updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+
+-- Fix questions table
+ALTER TABLE questions 
+  MODIFY createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  MODIFY updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+
+-- Fix results table
+ALTER TABLE results 
+  MODIFY createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  MODIFY updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+  
+SHOW CREATE TABLE users;
+
+INSERT INTO users (name, email, password, role, isActive, createdAt, updatedAt)
+VALUES (
+  'Admin',
+  'admin@devopsportal.com',
+  '$2a$12$.59LQgwDB6lURN0OXGg/judR1Ck/zP7F1PtmlX7DkpCy52RkWmBhW',
+  'admin',
+  1,
+  NOW(),
+  NOW()
+);
+
+SELECT id, name, email, role, isActive FROM users;
+
+UPDATE users SET isActive = 1 WHERE email = 'admin@devopsportal.com';
+
+-- Check current hash
+SELECT password FROM users WHERE email = 'admin@devopsportal.com';
+
+UPDATE users 
+SET password = '$2a$12$.59LQgwDB6lURN0OXGg/judR1Ck/zP7F1PtmlX7DkpCy52RkWmBhW'
+WHERE email = 'admin@devopsportal.com';
+
+
+
+
+
+
+
