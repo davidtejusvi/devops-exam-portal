@@ -1,0 +1,283 @@
+Here is the full process to push your Docker images to a Docker Registry, using the same flow we followed for your devops-exam-portal.
+The idea is:
+
+Source Code
+    |
+    v
+Docker Build
+    |
+    v
+Local Docker Image
+    |
+    v
+Docker Tag (Registry Name)
+    |
+    v
+Docker Login
+    |
+    v
+Docker Push
+    |
+    v
+Docker Registry
+
+Step 1: Verify your application images exist locally
+After running:
+docker compose up -d --build
+
+Docker created images.
+First check:
+
+docker images
+
+You saw images like:
+REPOSITORY                         TAG
+devops-exam-portal-backend         latest
+devops-exam-portal-frontend        latest
+mysql                              8.0
+
+At this stage:
+Images exist only on your EC2 machine
+Nobody else can pull them
+Example:
+EC2 Docker Engine
+
+devops-exam-portal-backend:latest
+devops-exam-portal-frontend:latest
+
+Step 2: Create repositories in Docker Registry
+I chose Docker Hub as the example.
+Create repositories:
+
+Docker Hub
+ |
+ ├── davidtejusvi/devops-exam-backend
+ |
+ └── davidtejusvi/devops-exam-frontend
+
+Why?
+Docker push requires this format:
+
+username/repository:tag
+
+Example:
+davidtejusvi/devops-exam-backend:v1
+
+Step 3: Login to Docker Registry
+Command:
+docker login
+
+Docker asks:
+Username:
+Password:
+
+After successful login:
+Login Succeeded
+
+Now Docker knows where to upload.
+Step 4: Tag the local image
+This is the important step.
+Your local image:
+
+devops-exam-portal-backend
+
+does not know where to go.
+We attach a registry name:
+
+Command:
+
+docker tag devops-exam-portal-backend davidtejusvi/devops-exam-backend:v1
+
+Meaning:
+LOCAL IMAGE
+     |
+     |
+     v
+REGISTRY IMAGE NAME
+
+
+devops-exam-portal-backend
+          |
+          |
+          v
+davidtejusvi/devops-exam-backend:v1
+
+Now check:
+docker images
+
+Output:
+REPOSITORY                              TAG
+
+devops-exam-portal-backend              latest
+
+davidtejusvi/devops-exam-backend        v1
+
+Important:
+The image is not copied.
+
+Docker only creates another name/tag pointing to the same image layers.
+
+Step 5: Tag frontend image
+Same process:
+Original:
+
+devops-exam-portal-frontend
+
+Command:
+docker tag devops-exam-portal-frontend davidtejusvi/devops-exam-frontend:v1
+
+Now:
+Local:
+
+devops-exam-portal-frontend:latest
+
+
+Registry:
+
+davidtejusvi/devops-exam-frontend:v1
+
+Step 6: Push images
+Now upload.
+Backend:
+
+docker push davidtejusvi/devops-exam-backend:v1
+
+Docker does:
+Check image layers
+
+Layer 1 ───── upload
+Layer 2 ───── upload
+Layer 3 ───── upload
+
+Create manifest
+
+Finish
+
+Example output:
+v1: digest: sha256:xxxxx
+status: pushed
+
+Frontend:
+docker push davidtejusvi/devops-exam-frontend:v1
+
+Step 7: Verify in registry
+Go to Docker Hub.
+You should see:
+
+Repositories
+
+davidtejusvi/devops-exam-backend
+
+Tags:
+    v1
+
+
+davidtejusvi/devops-exam-frontend
+
+Tags:
+    v1
+
+Step 8: Test pulling from another machine
+On another server:
+Login:
+
+docker login
+
+Pull:
+docker pull davidtejusvi/devops-exam-backend:v1
+
+Check:
+docker images
+
+Now the image exists there.
+Step 9: Change docker-compose.yml for production
+Before:
+backend:
+  build: ./backend
+
+Meaning:
+EC2 downloads code
+      |
+      v
+Build image
+      |
+      v
+Run container
+
+After registry:
+backend:
+  image: davidtejusvi/devops-exam-backend:v1
+
+Meaning:
+EC2
+ |
+ |
+Pull image from registry
+ |
+ |
+Run container
+
+Same for frontend:
+frontend:
+  image: davidtejusvi/devops-exam-frontend:v1
+
+Step 10: Deployment becomes simpler
+New server:
+git clone repo
+cd devops-exam-portal
+docker compose pull
+docker compose up -d
+
+No:
+docker build
+
+No:
+npm install
+
+No:
+mvn package
+
+because everything is already inside the image.
+Your complete DevOps pipeline now
+Developer
+    |
+    v
+GitHub Repository
+    |
+    v
+Dockerfile
+    |
+    v
+docker compose build
+    |
+    v
+Docker Images
+    |
+    v
+docker tag
+    |
+    v
+Docker Hub / AWS ECR
+    |
+    v
+docker pull
+    |
+    v
+EC2 Deployment
+
+For your current project, the next improvement would be:
+GitHub
+   |
+   v
+GitHub Actions
+   |
+   v
+Build Docker Images
+   |
+   v
+Push automatically to AWS ECR/Docker Hub
+   |
+   v
+Deploy to EC2
+
+That would turn your manual process into a CI/CD pipeline.
